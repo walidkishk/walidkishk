@@ -679,10 +679,10 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly(['unreadByUser', 'updatedAt'])
           )
           ||
-          // Action: Verified Owner replies to user
+          // Action: Verified Owner replies to user or syncs summary after deleting an owner message
           (
             isAppOwner()
-            && incoming().lastSenderRole == 'owner'
+            && incoming().lastSenderRole in ['user', 'owner']
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'lastMessageText',
               'lastSenderRole',
@@ -722,7 +722,9 @@ service cloud.firestore {
         allow delete: if isAppOwner()
           && isValidId(userId)
           && isValidId(messageId)
-          && exists(/databases/$(database)/documents/ownerChats/$(userId));
+          && exists(/databases/$(database)/documents/ownerChats/$(userId))
+          && resource != null
+          && existing().senderRole == 'owner';
       }
     }
   }

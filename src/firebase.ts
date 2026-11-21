@@ -1423,6 +1423,86 @@ export async function markOwnerChatRead(
   }
 }
 
+export async function deleteOwnerChatMessage(
+  user: User,
+  threadUserId: string,
+  messageId: string,
+): Promise<void> {
+  if (!isAppOwnerUser(user)) {
+    throw new Error('حذف رسائل المالك متاح لحساب المالك فقط.');
+  }
+
+  const safeThreadUid = sanitizeId(threadUserId);
+  const safeMsgId = sanitizeId(messageId);
+  const path = `ownerChats/${safeThreadUid}/messages/${safeMsgId}`;
+  const threadRef = doc(db, 'ownerChats', safeThreadUid);
+  const msgRef = doc(db, 'ownerChats', safeThreadUid, 'messages', safeMsgId);
+
+  try {
+    const msgSnap = await getDoc(msgRef);
+    if (!msgSnap.exists()) {
+      return;
+    }
+    const msgData = msgSnap.data() as Record<string, unknown>;
+    if (msgData.senderRole !== 'owner') {
+      throw new Error('يمكن للمالك حذف الرسائل المرسلة من خلاله فقط.');
+    }
+
+    const threadSnap = await getDoc(threadRef);
+    const remainingSnap = await getDocs(
+      query(
+        collection(db, 'ownerChats', safeThreadUid, 'messages'),
+        where('threadUserId', '==', safeThreadUid),
+      ),
+    );
+
+    const remaining = remainingSnap.docs
+      .filter((d) => d.id !== safeMsgId)
+      .map((d) => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          text: String(data.text || ''),
+          senderRole: (data.senderRole === 'owner' ? 'owner' : 'user') as 'owner' | 'user',
+          createdAtIso: String(data.createdAtIso || new Date().toISOString()),
+        };
+      })
+      .sort((a, b) => Date.parse(a.createdAtIso) - Date.parse(b.createdAtIso));
+
+    const batch = writeBatch(db);
+    batch.delete(msgRef);
+
+    if (threadSnap.exists()) {
+      const latest = remaining[remaining.length - 1];
+      if (latest) {
+        batch.update(threadRef, {
+          lastMessageText: clampStr(latest.text, 1500, 'رسالة'),
+          lastSenderRole: latest.senderRole,
+          lastMessageAtIso: clampStr(latest.createdAtIso, 64, new Date().toISOString()),
+          unreadByOwner: false,
+          unreadByUser: false,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        batch.update(threadRef, {
+          lastMessageText: 'تم حذف الرسالة',
+          lastSenderRole: 'owner',
+          lastMessageAtIso: new Date().toISOString(),
+          unreadByOwner: false,
+          unreadByUser: false,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    await batch.commit();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('حذف الرسائل')) {
+      throw error;
+    }
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
 export {
   browserPopupRedirectResolver,
   createUserWithEmailAndPassword,

@@ -10,9 +10,11 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   User as UserIcon,
 } from 'lucide-react';
 import {
+  deleteOwnerChatMessage,
   fetchAllOwnerChatThreadsFromServer,
   fetchOwnerChatMessagesFromServer,
   fetchUserOwnerChatThreadFromServer,
@@ -67,6 +69,7 @@ export function OwnerChatPanel({
   const [messages, setMessages] = useState<OwnerChatMessage[]>([]);
   const [draftText, setDraftText] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
+  const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
   const [refreshingChat, setRefreshingChat] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [verifyingAction, setVerifyingAction] = useState<boolean>(false);
@@ -204,6 +207,23 @@ export function OwnerChatPanel({
       setChatError(err instanceof Error ? err.message : 'تعذر إرسال الرسالة حالياً.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleDeleteOwnerMessage = async (msg: OwnerChatMessage) => {
+    if (!isVerifiedOwner || msg.senderRole !== 'owner' || !activeThreadUid) return;
+    if (deletingMsgId) return;
+
+    setChatError(null);
+    setDeletingMsgId(msg.id);
+    try {
+      await deleteOwnerChatMessage(firebaseUser, activeThreadUid, msg.id);
+    } catch (err) {
+      if (!isTransientFirestoreNetworkError(err)) {
+        setChatError(err instanceof Error ? err.message : 'تعذر حذف الرسالة حالياً.');
+      }
+    } finally {
+      setDeletingMsgId(null);
     }
   };
 
@@ -533,9 +553,23 @@ export function OwnerChatPanel({
                                     : 'border border-slate-200 bg-white text-slate-900 dark:border-zinc-800 dark:bg-[#09090b] dark:text-zinc-100'
                                 }`}
                               >
-                                <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] opacity-85">
-                                  <span className="font-bold">{senderLabel}</span>
-                                  <span>{formatChatTimeAr(msg.createdAtIso)}</span>
+                                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] opacity-85">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold">{senderLabel}</span>
+                                    <span>{formatChatTimeAr(msg.createdAtIso)}</span>
+                                  </div>
+                                  {isVerifiedOwner && msg.senderRole === 'owner' && (
+                                    <button
+                                      type="button"
+                                      disabled={deletingMsgId === msg.id}
+                                      onClick={() => void handleDeleteOwnerMessage(msg)}
+                                      title="حذف الرسالة"
+                                      aria-label="حذف الرسالة"
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/15 text-white transition-colors hover:bg-rose-500/90 disabled:opacity-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" aria-hidden="true" />
+                                    </button>
+                                  )}
                                 </div>
                                 <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                               </div>
