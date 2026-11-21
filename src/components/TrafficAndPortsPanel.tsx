@@ -8,12 +8,10 @@ import {
   Globe,
   Layers,
   MapPin,
-  Plus,
   RefreshCw,
   Search,
   Server,
   Sparkles,
-  Trash2,
   X,
 } from 'lucide-react';
 import { useInAppBrowser } from '../context/InAppBrowserContext.tsx';
@@ -105,10 +103,7 @@ export function TrafficAndPortsPanel({
   discoveryResult = null,
   onDismissDiscoveryResult,
 }: TrafficAndPortsPanelProps) {
-  const { openInAppUrl, savedSites, addCustomSite, removeCustomSite } = useInAppBrowser();
-  const [customSiteTitle, setCustomSiteTitle] = useState<string>('');
-  const [customSiteUrl, setCustomSiteUrl] = useState<string>('');
-  const [customSiteNotice, setCustomSiteNotice] = useState<string | null>(null);
+  const { openInAppUrl } = useInAppBrowser();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [protocolFilter, setProtocolFilter] = useState<'all' | ProtocolFormatId>('all');
@@ -471,91 +466,6 @@ export function TrafficAndPortsPanel({
                 </select>
               </div>
             </div>
-          </div>
-
-          {/* Custom Added Websites / Config Sites / Articles Launcher (Opens Inside App WebView) */}
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-zinc-800 dark:bg-black">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-slate-900 dark:text-white">
-                إضافة وفتح مواقع الكونفيجات والمقالات والروابط داخل التطبيق
-              </div>
-              <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                تفتح جميع المواقع داخل العارض الداخلي دون الخروج إلى المتصفح
-              </span>
-            </div>
-
-            <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                value={customSiteTitle}
-                onChange={(e) => setCustomSiteTitle(e.target.value)}
-                placeholder="اسم الموقع أو المقال (اختياري)"
-                className="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-zinc-700 dark:bg-[#09090b] dark:text-zinc-100 sm:w-48"
-              />
-              <input
-                type="text"
-                dir="ltr"
-                value={customSiteUrl}
-                onChange={(e) => {
-                  setCustomSiteUrl(e.target.value);
-                  setCustomSiteNotice(null);
-                }}
-                placeholder="https://example.com أو رابط تليجرام / واتساب..."
-                className="min-h-[38px] flex-1 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-zinc-700 dark:bg-[#09090b] dark:text-zinc-100"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const added = addCustomSite(customSiteTitle, customSiteUrl, 'config');
-                  if (!added) {
-                    setCustomSiteNotice('يرجى إدخال رابط موقع صالح مثل https://...');
-                    return;
-                  }
-                  setCustomSiteTitle('');
-                  setCustomSiteUrl('');
-                  setCustomSiteNotice(null);
-                  openInAppUrl(added.url, { title: added.title });
-                }}
-                className="inline-flex min-h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>إضافة وفتح داخل التطبيق</span>
-              </button>
-            </div>
-
-            {customSiteNotice && (
-              <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                {customSiteNotice}
-              </p>
-            )}
-
-            {savedSites.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {savedSites.map((site) => (
-                  <div
-                    key={site.id}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white pr-2.5 pl-1 py-1 text-xs dark:border-zinc-700 dark:bg-[#09090b]"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => openInAppUrl(site.url, { title: site.title })}
-                      className="inline-flex items-center gap-1.5 font-semibold text-slate-800 hover:text-emerald-600 dark:text-zinc-200 dark:hover:text-emerald-400"
-                    >
-                      <Globe className="h-3 w-3 text-emerald-500" aria-hidden="true" />
-                      <span className="max-w-[180px] truncate">{site.title}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeCustomSite(site.id)}
-                      aria-label={`حذف ${site.title}`}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-zinc-900 dark:hover:text-rose-400"
-                    >
-                      <Trash2 className="h-3 w-3" aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 

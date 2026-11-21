@@ -56,12 +56,7 @@ function storeCookiesFromResponse(
   const allHeaders = rawSetCookies.length > 0 ? rawSetCookies : fallback ? [fallback] : [];
   if (allHeaders.length === 0) return;
 
-  const domainKey = hostname.toLowerCase();
-  let domainCookies = jar.domains.get(domainKey);
-  if (!domainCookies) {
-    domainCookies = new Map<string, string>();
-    jar.domains.set(domainKey, domainCookies);
-  }
+  const responseHost = hostname.toLowerCase();
 
   for (const raw of allHeaders) {
     const firstPart = raw.split(';')[0]?.trim();
@@ -71,7 +66,29 @@ function storeCookiesFromResponse(
     const name = firstPart.slice(0, eqIdx).trim();
     const val = firstPart.slice(eqIdx + 1).trim();
     if (!name) continue;
-    if (val === '' || /max-age=0/i.test(raw)) {
+
+    let domainKey = responseHost;
+    const domainAttr = raw
+      .match(/;\s*domain=([^;]+)/i)?.[1]
+      ?.trim()
+      .toLowerCase()
+      .replace(/^\./, '');
+    if (
+      domainAttr &&
+      /^[a-z0-9.-]+$/.test(domainAttr) &&
+      domainAttr.split('.').length >= 2 &&
+      (responseHost === domainAttr || responseHost.endsWith(`.${domainAttr}`))
+    ) {
+      domainKey = domainAttr;
+    }
+
+    let domainCookies = jar.domains.get(domainKey);
+    if (!domainCookies) {
+      domainCookies = new Map<string, string>();
+      jar.domains.set(domainKey, domainCookies);
+    }
+
+    if (val === '' || /max-age=0\b/i.test(raw)) {
       domainCookies.delete(name);
     } else {
       domainCookies.set(name, val);
@@ -230,22 +247,50 @@ async function validateExternalTargetUrl(rawUrl: string): Promise<URL> {
   return parsed;
 }
 
+function resolveSafeProxyEndpoint(req: Request): string {
+  const rawProto = String(req.get('x-forwarded-proto') || req.protocol || 'https')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const proto = rawProto === 'http' || rawProto === 'https' ? rawProto : 'https';
+  const rawHost = String(req.get('x-forwarded-host') || req.get('host') || '')
+    .split(',')[0]
+    .trim();
+  if (!rawHost || !/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(rawHost)) {
+    return '/api/webview/proxy';
+  }
+  return `${proto}://${rawHost}/api/webview/proxy`;
+}
+
+function sanitizeForwardUserAgent(rawUa: string | undefined): string {
+  const fallback =
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+  if (!rawUa || !rawUa.trim()) return fallback;
+  return rawUa
+    .replace(/;\s*wv\)/gi, ')')
+    .replace(/\bVersion\/\d+(?:\.\d+)*\s+/gi, '');
+}
+
 function buildInjectedBridgeScript(
   finalUrl: string,
   wvSession: string,
   initialStorageJson: string,
+  proxyEndpoint: string,
 ): string {
   const safeFinalUrl = JSON.stringify(finalUrl).replace(/</g, '\\u003c');
   const safeSession = JSON.stringify(wvSession).replace(/</g, '\\u003c');
+  const safeProxyEndpoint = JSON.stringify(proxyEndpoint).replace(/</g, '\\u003c');
   const safeInitialStorage = initialStorageJson.replace(/</g, '\\u003c');
 
   return `<script data-vpnfastore-bridge="1">
 (function() {
   var CURRENT_URL = ${safeFinalUrl};
   var WV_SESSION = ${safeSession};
-  var PROXY_ENDPOINT = '/api/webview/proxy';
+  var PROXY_ENDPOINT = ${safeProxyEndpoint};
   var CURRENT_ORIGIN = '';
+  var PROXY_ORIGIN = '';
   try { CURRENT_ORIGIN = new URL(CURRENT_URL).origin; } catch (e) {}
+  try { PROXY_ORIGIN = new URL(PROXY_ENDPOINT, CURRENT_URL).origin; } catch (e) {}
 
   function postToShell(payload) {
     try {
@@ -309,7 +354,17 @@ function buildInjectedBridgeScript(
     var normalized = normalizeScheme(raw);
     if (!normalized) return '';
     try {
-      return new URL(normalized, CURRENT_URL).href;
+      var base = CURRENT_URL;
+      try {
+        if (document.baseURI && /^https?:/i.test(document.baseURI) && document.baseURI.indexOf('/api/webview/proxy') === -1) {
+          base = document.baseURI;
+        }
+      } catch (e) {}
+      var u = new URL(normalized, base);
+      if (PROXY_ORIGIN && u.origin === PROXY_ORIGIN && u.pathname !== '/api/webview/proxy' && CURRENT_ORIGIN) {
+        u = new URL(u.pathname + u.search + u.hash, CURRENT_ORIGIN);
+      }
+      return u.href;
     } catch (e) {
       return '';
     }
@@ -388,6 +443,38 @@ function buildInjectedBridgeScript(
         Object.defineProperty(window, 'sessionStorage', { value: ssShim, configurable: true });
       } catch (e3) {}
     }
+    // 1b. Virtual document.cookie shim when running inside opaque-origin sandboxed iframe
+    try {
+      var testCookieRead = document.cookie;
+      void testCookieRead;
+    } catch (cookieErr) {
+      var cookieJar = Object.create(null);
+      var cookieDesc = {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+          var parts = [];
+          Object.keys(cookieJar).forEach(function(k) {
+            parts.push(k + '=' + cookieJar[k]);
+          });
+          return parts.join('; ');
+        },
+        set: function(raw) {
+          var s = String(raw || '');
+          var first = s.split(';')[0].trim();
+          var eq = first.indexOf('=');
+          if (eq <= 0) return;
+          var cname = first.slice(0, eq).trim();
+          var cval = first.slice(eq + 1).trim();
+          if (/max-age=0\b/i.test(s)) {
+            delete cookieJar[cname];
+          } else {
+            cookieJar[cname] = cval;
+          }
+        }
+      };
+      try { Object.defineProperty(document, 'cookie', cookieDesc); } catch (e4) {}
+    }
   } catch (e) {}
 
   // 2. Completely block external window.open / popups — route everything inside the WebView
@@ -400,25 +487,193 @@ function buildInjectedBridgeScript(
     };
   } catch (e) {}
 
-  // 3. Rewrite relative fetch & XHR calls so they proxy cleanly to the target origin
+  function resolveProxyTargetHref(rawUrl) {
+    try {
+      var s = String(rawUrl || '');
+      if (!s || s.startsWith('data:') || s.startsWith('blob:') || s.indexOf('/api/webview/proxy') !== -1) {
+        return null;
+      }
+      var resolvedHref = resolveAgainstCurrent(s);
+      if (!resolvedHref) return null;
+      var resolved = new URL(resolvedHref);
+      if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return null;
+      return resolved.href;
+    } catch (e) {}
+    return null;
+  }
+
+  function buildProxiedEndpointUrl(targetHref) {
+    return PROXY_ENDPOINT + '?url=' + encodeURIComponent(targetHref) + '&wvSession=' + encodeURIComponent(WV_SESSION);
+  }
+
+  // 3. Rewrite fetch & XHR calls through PROXY_ENDPOINT with credentials omitted so Access-Control-Allow-Origin: * never rejects
   try {
     var origFetch = window.fetch;
     if (typeof origFetch === 'function') {
       window.fetch = function(input, init) {
         try {
           var rawUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-          if (rawUrl && !rawUrl.startsWith('data:') && !rawUrl.startsWith('blob:') && !rawUrl.startsWith(PROXY_ENDPOINT)) {
-            var resolved = new URL(rawUrl, CURRENT_URL);
-            if ((resolved.protocol === 'http:' || resolved.protocol === 'https:') && resolved.origin === CURRENT_ORIGIN) {
-              var proxied = PROXY_ENDPOINT + '?url=' + encodeURIComponent(resolved.href) + '&wvSession=' + encodeURIComponent(WV_SESSION);
-              if (typeof input === 'string') {
-                return origFetch.call(window, proxied, init);
+          var targetHref = resolveProxyTargetHref(rawUrl);
+          if (targetHref) {
+            var proxied = buildProxiedEndpointUrl(targetHref);
+            if (typeof input === 'string' || (typeof URL !== 'undefined' && input instanceof URL)) {
+              var nextInit = Object.assign({}, init || {}, { credentials: 'omit' });
+              return origFetch.call(window, proxied, nextInit);
+            }
+            if (typeof Request !== 'undefined' && input instanceof Request) {
+              var reqInit = {
+                method: (init && init.method) || input.method || 'GET',
+                headers: (init && init.headers) || input.headers,
+                credentials: 'omit',
+                mode: 'cors',
+                cache: 'no-store'
+              };
+              if (init && init.body !== undefined) {
+                reqInit.body = init.body;
+              } else if (reqInit.method !== 'GET' && reqInit.method !== 'HEAD') {
+                return input.clone().arrayBuffer().then(function(buf) {
+                  reqInit.body = buf;
+                  return origFetch.call(window, proxied, reqInit);
+                });
               }
+              return origFetch.call(window, proxied, reqInit);
             }
           }
         } catch (e) {}
         return origFetch.apply(window, arguments);
       };
+    }
+  } catch (e) {}
+
+  try {
+    var origXhrOpen = XMLHttpRequest.prototype.open;
+    var origXhrSend = XMLHttpRequest.prototype.send;
+    var xhrCredDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'withCredentials');
+    var xhrRespUrlDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseURL');
+
+    if (xhrCredDesc && xhrCredDesc.configurable) {
+      Object.defineProperty(XMLHttpRequest.prototype, 'withCredentials', {
+        configurable: true,
+        enumerable: xhrCredDesc.enumerable,
+        get: function() {
+          if (this.__vpnProxied) return Boolean(this.__vpnVirtualWithCreds);
+          return xhrCredDesc.get ? xhrCredDesc.get.call(this) : false;
+        },
+        set: function(val) {
+          if (this.__vpnProxied) {
+            this.__vpnVirtualWithCreds = Boolean(val);
+            if (xhrCredDesc.set) {
+              try { xhrCredDesc.set.call(this, false); } catch (e) {}
+            }
+            return;
+          }
+          if (xhrCredDesc.set) xhrCredDesc.set.call(this, val);
+        }
+      });
+    }
+
+    if (xhrRespUrlDesc && xhrRespUrlDesc.configurable) {
+      Object.defineProperty(XMLHttpRequest.prototype, 'responseURL', {
+        configurable: true,
+        enumerable: xhrRespUrlDesc.enumerable,
+        get: function() {
+          if (this.__vpnProxied && this.__vpnTargetUrl) return this.__vpnTargetUrl;
+          return xhrRespUrlDesc.get ? xhrRespUrlDesc.get.call(this) : '';
+        }
+      });
+    }
+
+    if (typeof origXhrOpen === 'function') {
+      XMLHttpRequest.prototype.open = function(method, url) {
+        var args = Array.prototype.slice.call(arguments);
+        try {
+          var targetHref = resolveProxyTargetHref(url);
+          if (targetHref) {
+            this.__vpnProxied = true;
+            this.__vpnTargetUrl = targetHref;
+            args[1] = buildProxiedEndpointUrl(targetHref);
+            if (xhrCredDesc && xhrCredDesc.set) {
+              try { xhrCredDesc.set.call(this, false); } catch (e) {}
+            }
+          } else {
+            this.__vpnProxied = false;
+            this.__vpnTargetUrl = '';
+          }
+        } catch (e) {}
+        return origXhrOpen.apply(this, args);
+      };
+    }
+
+    if (typeof origXhrSend === 'function') {
+      XMLHttpRequest.prototype.send = function() {
+        if (this.__vpnProxied && xhrCredDesc && xhrCredDesc.set) {
+          try { xhrCredDesc.set.call(this, false); } catch (e) {}
+        }
+        return origXhrSend.apply(this, arguments);
+      };
+    }
+  } catch (e) {}
+
+  // 3b. Prevent History.pushState / replaceState SecurityError inside opaque-origin sandboxed iframe
+  var inHistoryShim = false;
+  try {
+    var origPushState = window.history.pushState;
+    var origReplaceState = window.history.replaceState;
+    function handleHistoryUpdate(origFn, ctx, args) {
+      var nextUrlArg = args.length >= 3 ? args[2] : null;
+      if (nextUrlArg) {
+        try {
+          var resolvedNextHref = resolveAgainstCurrent(String(nextUrlArg));
+          if (resolvedNextHref) {
+            var resolvedNext = new URL(resolvedNextHref);
+            if (resolvedNext.protocol === 'http:' || resolvedNext.protocol === 'https:') {
+              CURRENT_URL = resolvedNext.href;
+              CURRENT_ORIGIN = resolvedNext.origin;
+              postToShell({
+                type: 'vpnfastore_webview_meta',
+                url: CURRENT_URL,
+                title: document.title || CURRENT_URL
+              });
+            }
+          }
+        } catch (e) {}
+      }
+      inHistoryShim = true;
+      try {
+        return origFn.apply(ctx, args);
+      } catch (secErr) {
+        return undefined;
+      } finally {
+        inHistoryShim = false;
+      }
+    }
+    if (typeof origPushState === 'function') {
+      window.history.pushState = function() {
+        return handleHistoryUpdate(origPushState, this, arguments);
+      };
+    }
+    if (typeof origReplaceState === 'function') {
+      window.history.replaceState = function() {
+        return handleHistoryUpdate(origReplaceState, this, arguments);
+      };
+    }
+  } catch (e) {}
+
+  // 3c. Intercept programmatic location.href / location.assign / location.replace via Navigation API
+  try {
+    if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+      window.navigation.addEventListener('navigate', function(navEvent) {
+        try {
+          if (inHistoryShim || !navEvent || !navEvent.destination || !navEvent.destination.url) return;
+          if (navEvent.downloadRequest) return;
+          var destUrl = String(navEvent.destination.url);
+          if (destUrl.indexOf('/api/webview/proxy') !== -1) return;
+          if (!/^https?:/i.test(destUrl)) return;
+          if (navEvent.hashChange) return;
+          navEvent.preventDefault();
+          requestNavigation(destUrl, false);
+        } catch (err) {}
+      });
     }
   } catch (e) {}
 
@@ -440,17 +695,14 @@ function buildInjectedBridgeScript(
     requestNavigation(trimmed, false);
   }, true);
 
-  // 5. Intercept form submissions so GET/POST stay inside the same WebView
-  document.addEventListener('submit', function(e) {
-    var form = e.target;
-    if (!form || form.tagName !== 'FORM') return;
+  // 5. Intercept form submissions (both submit events and programmatic form.submit())
+  function prepareProxyFormSubmission(form, preventFn) {
     var rawAction = form.getAttribute('action') || CURRENT_URL;
     var resolvedAction = resolveAgainstCurrent(rawAction) || CURRENT_URL;
     var method = (form.getAttribute('method') || 'GET').toUpperCase();
 
     if (method === 'GET') {
-      e.preventDefault();
-      e.stopPropagation();
+      if (preventFn) preventFn();
       try {
         var fd = new FormData(form);
         var u = new URL(resolvedAction);
@@ -461,22 +713,85 @@ function buildInjectedBridgeScript(
       } catch (err) {
         requestNavigation(resolvedAction, false);
       }
-      return;
+      return false;
     }
 
-    // POST form: submit through same-origin proxy inside the same iframe
     try {
       form.setAttribute('target', '_self');
-      form.setAttribute(
-        'action',
-        PROXY_ENDPOINT + '?url=' + encodeURIComponent(resolvedAction) + '&wvSession=' + encodeURIComponent(WV_SESSION)
-      );
+      form.setAttribute('action', buildProxiedEndpointUrl(resolvedAction));
       postToShell({ type: 'vpnfastore_webview_loading', url: resolvedAction });
     } catch (err) {}
+    return true;
+  }
+
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (!form || form.tagName !== 'FORM') return;
+    prepareProxyFormSubmission(form, function() {
+      e.preventDefault();
+      e.stopPropagation();
+    });
   }, true);
 
-  // 6. Report title & load completion to parent WebView shell
+  try {
+    var origFormSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function() {
+      var shouldSubmitNative = prepareProxyFormSubmission(this, null);
+      if (shouldSubmitNative && typeof origFormSubmit === 'function') {
+        return origFormSubmit.apply(this, arguments);
+      }
+    };
+  } catch (e) {}
+
+  // 6. Prevent flex-centered auth layouts (e.g. Google Sign-In) from clipping top header off-screen on mobile
+  function fixTopViewportClipping() {
+    try {
+      var body = document.body;
+      var rootEl = document.documentElement;
+      if (!body || !rootEl) return;
+
+      var nodes = [rootEl, body];
+      var children = body.children;
+      for (var i = 0; i < Math.min(children.length, 6); i++) {
+        nodes.push(children[i]);
+        if (children[i].firstElementChild) {
+          nodes.push(children[i].firstElementChild);
+        }
+      }
+
+      for (var j = 0; j < nodes.length; j++) {
+        var node = nodes[j];
+        if (!node || !node.style || node.nodeType !== 1) continue;
+        var cs = window.getComputedStyle(node);
+        if (cs.display === 'flex' || cs.display === 'inline-flex') {
+          var isCol = cs.flexDirection.indexOf('column') !== -1;
+          var rect = node.getBoundingClientRect();
+          var firstChild = node.firstElementChild;
+          var childRect = firstChild ? firstChild.getBoundingClientRect() : null;
+          if (
+            rect.top < -2 ||
+            (childRect && childRect.top < -2) ||
+            (isCol && cs.justifyContent === 'center' && node.scrollHeight > window.innerHeight)
+          ) {
+            node.style.setProperty('justify-content', 'flex-start', 'important');
+            node.style.setProperty('align-items', isCol ? 'stretch' : 'flex-start', 'important');
+            node.style.setProperty('height', 'auto', 'important');
+            node.style.setProperty('min-height', '100%', 'important');
+            if (rect.top < 0) {
+              node.style.setProperty('margin-top', '0px', 'important');
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 7. Report URL, title & load completion to parent WebView shell
   function reportMeta(loaded) {
+    fixTopViewportClipping();
+    if (loaded) {
+      try { window.scrollTo(0, 0); } catch (e) {}
+    }
     postToShell({
       type: loaded ? 'vpnfastore_webview_loaded' : 'vpnfastore_webview_meta',
       url: CURRENT_URL,
@@ -489,7 +804,12 @@ function buildInjectedBridgeScript(
   } else {
     reportMeta(false);
   }
-  window.addEventListener('load', function() { reportMeta(true); });
+  window.addEventListener('load', function() {
+    reportMeta(true);
+    setTimeout(fixTopViewportClipping, 180);
+    setTimeout(fixTopViewportClipping, 600);
+  });
+  window.addEventListener('resize', fixTopViewportClipping);
 })();
 </script>`;
 }
@@ -499,6 +819,7 @@ function rewriteHtmlForWebView(
   finalUrl: string,
   wvSession: string,
   initialStorageJson: string,
+  proxyEndpoint: string,
 ): string {
   const parsed = new URL(finalUrl);
   const baseHref = `${parsed.origin}${parsed.pathname.endsWith('/') ? parsed.pathname : parsed.pathname.replace(/[^/]*$/, '')}`;
@@ -516,8 +837,14 @@ function rewriteHtmlForWebView(
 
   const hasBase = /<base\b/i.test(rewritten);
   const baseTag = hasBase ? '' : `<base href="${safeBaseHref}" target="_self" />`;
-  const bridgeScript = buildInjectedBridgeScript(finalUrl, wvSession, initialStorageJson);
-  const injection = `${baseTag}${bridgeScript}`;
+  const layoutFixStyle = `<style data-vpnfastore-layout="1">html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;scroll-padding-top:12px!important;}body{margin:0;padding-top:env(safe-area-inset-top,0px);}</style>`;
+  const bridgeScript = buildInjectedBridgeScript(
+    finalUrl,
+    wvSession,
+    initialStorageJson,
+    proxyEndpoint,
+  );
+  const injection = `${baseTag}${layoutFixStyle}${bridgeScript}`;
 
   if (/<head(\s[^>]*)?>/i.test(rewritten)) {
     rewritten = rewritten.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n${injection}`);
@@ -570,6 +897,22 @@ function renderProxyErrorHtml(targetUrl: string, messageAr: string): string {
 }
 
 export async function handleWebViewProxy(req: Request, res: Response): Promise<void> {
+  // Allow isolated sandboxed iframe (opaque 'null' origin) to run XHR/fetch against this proxy route
+  const reqCorsHeaders = String(req.get('access-control-request-headers') || '').trim();
+  const safeAllowHeaders =
+    reqCorsHeaders && /^[a-zA-Z0-9,\s_-]{1,512}$/.test(reqCorsHeaders)
+      ? reqCorsHeaders
+      : 'Content-Type, X-Requested-With, Google-Accounts-XSRF, X-Same-Domain, X-Goog-BatchExecute-Bgr, X-Goog-AuthUser, X-Client-Data, X-Framework-Xsrf-Token, Authorization';
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', safeAllowHeaders);
+  res.setHeader('Access-Control-Expose-Headers', '*');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
   const rawUrl =
     typeof req.query.url === 'string'
       ? req.query.url
@@ -587,6 +930,7 @@ export async function handleWebViewProxy(req: Request, res: Response): Promise<v
       ? req.query.wvSession
       : 'default_wv_session';
   const jar = getOrCreateSessionJar(wvSession);
+  const proxyEndpoint = resolveSafeProxyEndpoint(req);
 
   const initialStorageRaw =
     typeof req.query.ls === 'string' && req.query.ls.length <= 16_000 ? req.query.ls : '{}';
@@ -639,10 +983,19 @@ export async function handleWebViewProxy(req: Request, res: Response): Promise<v
     }
 
     let upstreamRes: globalThis.Response | null = null;
-    let method = req.method === 'POST' ? 'POST' : req.method === 'HEAD' ? 'HEAD' : 'GET';
+    const upperReqMethod = req.method.toUpperCase();
+    let method =
+      upperReqMethod === 'POST' ||
+      upperReqMethod === 'PUT' ||
+      upperReqMethod === 'PATCH' ||
+      upperReqMethod === 'DELETE'
+        ? upperReqMethod
+        : upperReqMethod === 'HEAD'
+          ? 'HEAD'
+          : 'GET';
     let bodyToSend: BodyInit | undefined =
-      rawBody && rawBody.length > 0 && method === 'POST'
-        ? new Uint8Array(rawBody).buffer
+      rawBody && rawBody.length > 0 && method !== 'GET' && method !== 'HEAD'
+        ? new Uint8Array(rawBody)
         : undefined;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
@@ -650,14 +1003,26 @@ export async function handleWebViewProxy(req: Request, res: Response): Promise<v
       currentUrlStr = validatedUrl.href;
 
       const forwardHeaders: Record<string, string> = {
-        'User-Agent':
-          req.get('user-agent') ||
-          'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        'User-Agent': sanitizeForwardUserAgent(req.get('user-agent')),
         Accept: req.get('accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': req.get('accept-language') || 'ar,en-US;q=0.9,en;q=0.8',
       };
-      if (method === 'POST' && req.headers['content-type']) {
-        forwardHeaders['Content-Type'] = String(req.headers['content-type']);
+      if (method !== 'GET' && method !== 'HEAD') {
+        forwardHeaders.Origin = validatedUrl.origin;
+        forwardHeaders.Referer = validatedUrl.href;
+        if (req.headers['content-type']) {
+          forwardHeaders['Content-Type'] = String(req.headers['content-type']);
+        }
+      }
+      for (const [hdrKey, hdrVal] of Object.entries(req.headers)) {
+        if (typeof hdrVal !== 'string' || !hdrVal) continue;
+        if (
+          /^(x-same-domain|google-accounts-xsrf|x-requested-with|x-framework-xsrf-token|x-client-data|x-chrome-[a-z0-9-]+|x-goog-[a-z0-9-]+)$/i.test(
+            hdrKey,
+          )
+        ) {
+          forwardHeaders[hdrKey] = hdrVal;
+        }
       }
       const cookieHeader = buildCookieHeader(jar, validatedUrl.hostname);
       if (cookieHeader) {
@@ -728,6 +1093,7 @@ export async function handleWebViewProxy(req: Request, res: Response): Promise<v
         currentUrlStr,
         wvSession,
         initialStorageJson,
+        proxyEndpoint,
       );
       res.status(upstreamRes.status);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');

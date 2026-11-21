@@ -20,6 +20,7 @@ export interface WebViewTab {
   id: string;
   title: string;
   url: string;
+  frameUrl: string;
   history: string[];
   historyIndex: number;
   loading: boolean;
@@ -185,11 +186,12 @@ export function getStoredOriginData(targetUrl: string): string {
 }
 
 export function buildWebViewIframeSrc(tab: WebViewTab): string {
+  const target = tab.frameUrl || tab.url;
   if (tab.mode === 'direct') {
-    return tab.url;
+    return target;
   }
-  const ls = getStoredOriginData(tab.url);
-  return `/api/webview/proxy?url=${encodeURIComponent(tab.url)}&wvSession=${encodeURIComponent(tab.wvSession)}&ls=${encodeURIComponent(ls)}&_r=${tab.reloadCounter}`;
+  const ls = getStoredOriginData(target);
+  return `/api/webview/proxy?url=${encodeURIComponent(target)}&wvSession=${encodeURIComponent(tab.wvSession)}&ls=${encodeURIComponent(ls)}&_r=${tab.reloadCounter}`;
 }
 
 function loadSavedSites(): SavedCustomSite[] {
@@ -295,6 +297,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
                   ...t,
                   title: options?.title?.trim() || t.title,
                   url: normalized,
+                  frameUrl: normalized,
                   history: nextHistory,
                   historyIndex: nextIndex,
                   loading: true,
@@ -310,6 +313,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
           id: makeId('tab'),
           title: socialLabel ? `${socialLabel} · ${fallbackTitle}` : fallbackTitle,
           url: normalized,
+          frameUrl: normalized,
           history: [normalized],
           historyIndex: 0,
           loading: true,
@@ -387,6 +391,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
           return {
             ...t,
             url: normalized,
+            frameUrl: normalized,
             history: nextHistory,
             historyIndex: nextIndex,
             loading: true,
@@ -414,6 +419,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
             ? {
                 ...t,
                 url: prevUrl,
+                frameUrl: prevUrl,
                 historyIndex: prevIdx,
                 loading: true,
                 progress: 20,
@@ -444,6 +450,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
           ? {
               ...t,
               url: nextUrl,
+              frameUrl: nextUrl,
               historyIndex: nextIdx,
               loading: true,
               progress: 20,
@@ -458,7 +465,13 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTabIdRef.current
-          ? { ...t, loading: true, progress: 18, reloadCounter: t.reloadCounter + 1 }
+          ? {
+              ...t,
+              frameUrl: t.url,
+              loading: true,
+              progress: 18,
+              reloadCounter: t.reloadCounter + 1,
+            }
           : t,
       ),
     );
@@ -470,6 +483,7 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
         t.id === activeTabIdRef.current
           ? {
               ...t,
+              frameUrl: t.url,
               mode: t.mode === 'proxy' ? 'direct' : 'proxy',
               loading: true,
               progress: 18,
@@ -581,11 +595,14 @@ export function InAppBrowserProvider({ children }: { children: ReactNode }) {
       if (data.type === 'vpnfastore_webview_meta' || data.type === 'vpnfastore_webview_loaded') {
         const isDone = data.type === 'vpnfastore_webview_loaded';
         const nextTitle = typeof data.title === 'string' ? data.title.trim() : '';
+        const nextUrl =
+          typeof data.url === 'string' ? normalizeExternalUrl(data.url) : null;
         setTabs((prev) =>
           prev.map((t) =>
             t.id === activeTabIdRef.current
               ? {
                   ...t,
+                  url: nextUrl || t.url,
                   title: nextTitle || t.title,
                   loading: isDone ? false : t.loading,
                   progress: isDone ? 100 : Math.max(t.progress, 65),

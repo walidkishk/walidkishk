@@ -78,7 +78,7 @@ export function InAppWebViewModal() {
       role="dialog"
       aria-modal="true"
       aria-label="عارض المواقع الداخلي"
-      className="fixed inset-0 z-50 flex flex-col bg-white text-slate-900 dark:bg-black dark:text-zinc-100"
+      className="fixed inset-0 z-50 flex h-[100dvh] flex-col overflow-hidden bg-white text-slate-900 dark:bg-black dark:text-zinc-100"
     >
       {/* Multi-Tab Bar when multiple windows/tabs (e.g. separate WhatsApp/Telegram WebView) are open */}
       {tabs.length > 1 && (
@@ -121,7 +121,7 @@ export function InAppWebViewModal() {
       )}
 
       {/* Top WebView Control Bar */}
-      <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-[#09090b]">
+      <header className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-2.5 py-1.5 sm:gap-2 sm:px-3 sm:py-2 dark:border-zinc-800 dark:bg-[#09090b]">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -159,7 +159,7 @@ export function InAppWebViewModal() {
         </div>
 
         {/* Address Bar */}
-        <form onSubmit={handleAddressSubmit} className="flex min-w-[180px] flex-1 items-center gap-1.5">
+        <form onSubmit={handleAddressSubmit} className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="relative flex flex-1 items-center">
             <Lock
               className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
@@ -292,7 +292,7 @@ export function InAppWebViewModal() {
       </div>
 
       {/* Sandboxed Internal WebView Frame (Never escapes to external Chrome) */}
-      <div className="relative flex-1 bg-white dark:bg-zinc-950">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-white dark:bg-zinc-950">
         <iframe
           key={`${activeWebTab.id}_${activeWebTab.reloadCounter}_${activeWebTab.mode}`}
           src={iframeSrc}
@@ -304,7 +304,7 @@ export function InAppWebViewModal() {
           }
           referrerPolicy="no-referrer"
           onLoad={() => markWebViewLoaded(activeWebTab.id)}
-          className="h-full w-full border-0 bg-white"
+          className="block h-full w-full border-0 bg-white"
         />
       </div>
     </div>
