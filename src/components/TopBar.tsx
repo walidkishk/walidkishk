@@ -25,17 +25,10 @@ import {
   X,
 } from 'lucide-react';
 import { useInAppBrowser } from '../context/InAppBrowserContext.tsx';
-import type { SavedVpnAccount, ServerSummary, VpnProviderSummary } from '../types.ts';
+import { DEFAULT_NAV_ORDER, sanitizeNavOrder } from '../firebase.ts';
+import type { SavedVpnAccount, ServerSummary, VpnProviderSummary, WorkspaceTab } from '../types.ts';
 
-export type WorkspaceTab =
-  | 'overview'
-  | 'readyConfigs'
-  | 'tunnel'
-  | 'saved'
-  | 'servers'
-  | 'autorenew'
-  | 'tools'
-  | 'auth';
+export type { WorkspaceTab };
 
 interface TopBarProps {
   activeTab: WorkspaceTab;
@@ -44,68 +37,14 @@ interface TopBarProps {
   isDark: boolean;
   onToggleDark: () => void;
   onNavigateTab: (tab: WorkspaceTab) => void;
+  navOrder?: WorkspaceTab[];
+  onNavOrderChange?: (nextOrder: WorkspaceTab[]) => void;
   providers?: VpnProviderSummary[];
   servers?: ServerSummary[];
   accounts?: SavedVpnAccount[];
   onSelectServer?: (serverId: string) => void;
   onRefreshSiteData?: () => void;
   refreshingSiteData?: boolean;
-}
-
-const NAV_ORDER_STORAGE_KEY = 'vpn_fastore_nav_order_v1';
-
-const DEFAULT_NAV_ORDER: WorkspaceTab[] = [
-  'overview',
-  'readyConfigs',
-  'tunnel',
-  'saved',
-  'servers',
-  'autorenew',
-  'tools',
-  'auth',
-];
-
-function sanitizeNavOrder(raw: unknown): WorkspaceTab[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_NAV_ORDER];
-  const validSet = new Set<WorkspaceTab>(DEFAULT_NAV_ORDER);
-  const seen = new Set<WorkspaceTab>();
-  const result: WorkspaceTab[] = [];
-
-  for (const item of raw) {
-    if (typeof item === 'string' && validSet.has(item as WorkspaceTab)) {
-      const tab = item as WorkspaceTab;
-      if (!seen.has(tab)) {
-        seen.add(tab);
-        result.push(tab);
-      }
-    }
-  }
-
-  for (const fallback of DEFAULT_NAV_ORDER) {
-    if (!seen.has(fallback)) {
-      result.push(fallback);
-    }
-  }
-
-  return result;
-}
-
-function loadSavedNavOrder(): WorkspaceTab[] {
-  try {
-    const raw = localStorage.getItem(NAV_ORDER_STORAGE_KEY);
-    if (!raw) return [...DEFAULT_NAV_ORDER];
-    return sanitizeNavOrder(JSON.parse(raw));
-  } catch {
-    return [...DEFAULT_NAV_ORDER];
-  }
-}
-
-function persistNavOrder(order: WorkspaceTab[]): void {
-  try {
-    localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(order));
-  } catch {
-    // ignore storage restrictions
-  }
 }
 
 export function TopBar({
@@ -115,6 +54,8 @@ export function TopBar({
   isDark,
   onToggleDark,
   onNavigateTab,
+  navOrder: controlledNavOrder,
+  onNavOrderChange,
   providers = [],
   servers = [],
   accounts = [],
@@ -125,8 +66,13 @@ export function TopBar({
   const { openInAppUrl } = useInAppBrowser();
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [isEditingOrder, setIsEditingOrder] = useState<boolean>(false);
-  const [navOrder, setNavOrder] = useState<WorkspaceTab[]>(() => loadSavedNavOrder());
+  const [internalNavOrder, setInternalNavOrder] = useState<WorkspaceTab[]>(() => [...DEFAULT_NAV_ORDER]);
   const [draggedTab, setDraggedTab] = useState<WorkspaceTab | null>(null);
+
+  const navOrder = useMemo(
+    () => (controlledNavOrder ? sanitizeNavOrder(controlledNavOrder) : internalNavOrder),
+    [controlledNavOrder, internalNavOrder],
+  );
 
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -234,22 +180,25 @@ export function TopBar({
     return null;
   }, [searchQuery]);
 
+  const applyNextOrder = (next: WorkspaceTab[]) => {
+    const clean = sanitizeNavOrder(next);
+    if (!controlledNavOrder) {
+      setInternalNavOrder(clean);
+    }
+    onNavOrderChange?.(clean);
+  };
+
   const moveItem = (index: number, direction: -1 | 1) => {
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= navOrder.length) return;
-    setNavOrder((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(index, 1);
-      next.splice(targetIndex, 0, moved);
-      persistNavOrder(next);
-      return next;
-    });
+    const next = [...navOrder];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIndex, 0, moved);
+    applyNextOrder(next);
   };
 
   const handleResetOrder = () => {
-    const fresh = [...DEFAULT_NAV_ORDER];
-    setNavOrder(fresh);
-    persistNavOrder(fresh);
+    applyNextOrder([...DEFAULT_NAV_ORDER]);
   };
 
   const handleDragStart = (tabId: WorkspaceTab) => {
@@ -265,16 +214,14 @@ export function TopBar({
       setDraggedTab(null);
       return;
     }
-    setNavOrder((prev) => {
-      const fromIndex = prev.indexOf(draggedTab);
-      const toIndex = prev.indexOf(targetTabId);
-      if (fromIndex === -1 || toIndex === -1) return prev;
-      const next = [...prev];
+    const fromIndex = navOrder.indexOf(draggedTab);
+    const toIndex = navOrder.indexOf(targetTabId);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const next = [...navOrder];
       const [moved] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, moved);
-      persistNavOrder(next);
-      return next;
-    });
+      applyNextOrder(next);
+    }
     setDraggedTab(null);
   };
 
@@ -676,6 +623,9 @@ export function TopBar({
               disabled={!isAuthenticated}
               onClick={() => {
                 if (!isAuthenticated) return;
+                if (isEditingOrder) {
+                  onNavOrderChange?.(navOrder);
+                }
                 setIsEditingOrder((prev) => !prev);
               }}
               className={`inline-flex min-h-[34px] items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${

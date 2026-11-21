@@ -23,6 +23,10 @@
           "maxLength": 120,
           "description": "User display name."
         },
+        "navOrder": {
+          "type": "array",
+          "description": "Ordered list of sidebar navigation tab IDs personalized per user account."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

@@ -70,7 +70,7 @@ service cloud.firestore {
 
     function isValidUserProfile(data, userId) {
       return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'email', 'displayName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'navOrder', 'createdAt', 'updatedAt'])
         && isValidId(data.uid)
         && data.uid == request.auth.uid
         && data.uid == userId
@@ -78,6 +78,25 @@ service cloud.firestore {
         && data.email.size() >= 3
         && data.email.size() <= 320
         && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && (
+          !('navOrder' in data)
+          || (
+            data.navOrder is list
+            && data.navOrder.size() >= 1
+            && data.navOrder.size() <= 8
+            && data.navOrder[0] is string
+            && data.navOrder.hasOnly([
+              'overview',
+              'readyConfigs',
+              'tunnel',
+              'saved',
+              'servers',
+              'autorenew',
+              'tools',
+              'auth'
+            ])
+          )
+        )
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -462,7 +481,16 @@ service cloud.firestore {
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']);
+        && (
+          // Action: Sync user profile identity fields
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt'])
+          ||
+          // Action: Sync user account sidebar menu order
+          (
+            'navOrder' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['navOrder', 'updatedAt'])
+          )
+        );
       allow delete: if false;
 
       // User's Saved Real VPN Accounts subcollection

@@ -1,3 +1,13 @@
+export type WorkspaceTab =
+  | 'overview'
+  | 'readyConfigs'
+  | 'tunnel'
+  | 'saved'
+  | 'servers'
+  | 'autorenew'
+  | 'tools'
+  | 'auth';
+
 export type ProtocolFormatId =
   | 'ssh_ws'
   | 'ssh_ssl'

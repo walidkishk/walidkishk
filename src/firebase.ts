@@ -50,6 +50,7 @@ import type {
   ReadyConfigProtocolId,
   SavedVpnAccount,
   VpnProviderSummary,
+  WorkspaceTab,
 } from './types.ts';
 
 export const APP_OWNER_EMAIL = 'ledokishk@gmail.com';
@@ -406,6 +407,100 @@ export async function ensureUserProfile(
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export const DEFAULT_NAV_ORDER: WorkspaceTab[] = [
+  'overview',
+  'readyConfigs',
+  'tunnel',
+  'saved',
+  'servers',
+  'autorenew',
+  'tools',
+  'auth',
+];
+
+export function sanitizeNavOrder(raw: unknown): WorkspaceTab[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_NAV_ORDER];
+  const validSet = new Set<WorkspaceTab>(DEFAULT_NAV_ORDER);
+  const seen = new Set<WorkspaceTab>();
+  const result: WorkspaceTab[] = [];
+
+  for (const item of raw) {
+    if (typeof item === 'string' && validSet.has(item as WorkspaceTab)) {
+      const tab = item as WorkspaceTab;
+      if (!seen.has(tab)) {
+        seen.add(tab);
+        result.push(tab);
+      }
+    }
+  }
+
+  for (const fallback of DEFAULT_NAV_ORDER) {
+    if (!seen.has(fallback)) {
+      result.push(fallback);
+    }
+  }
+
+  return result;
+}
+
+export function subscribeUserNavOrder(
+  uid: string,
+  onData: (navOrder: WorkspaceTab[] | null) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const safeUid = sanitizeId(uid);
+  const path = `users/${safeUid}`;
+  const docRef = doc(db, 'users', safeUid);
+
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (!snap.exists()) {
+        onData(null);
+        return;
+      }
+      const data = snap.data() as Record<string, unknown>;
+      if (Array.isArray(data.navOrder) && data.navOrder.length > 0) {
+        onData(sanitizeNavOrder(data.navOrder));
+      } else {
+        onData(null);
+      }
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.GET, path);
+      } catch (wrapped) {
+        if (onError) {
+          onError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+        }
+      }
+    },
+  );
+}
+
+export async function updateUserNavOrder(
+  user: User,
+  navOrder: WorkspaceTab[],
+): Promise<void> {
+  const cleanOrder = sanitizeNavOrder(navOrder);
+  const path = `users/${user.uid}`;
+  const docRef = doc(db, 'users', user.uid);
+
+  try {
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      await ensureUserProfile(user);
+    }
+    await updateDoc(docRef, {
+      navOrder: cleanOrder,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if (isTransientFirestoreNetworkError(error)) return;
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

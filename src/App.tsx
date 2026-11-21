@@ -21,6 +21,7 @@ import {
   auth,
   createReadyConfigInFirestore,
   createUserWithEmailAndPassword,
+  DEFAULT_NAV_ORDER,
   deleteReadyConfigFromFirestore,
   deleteVpnAccountFromFirestore,
   ensureUserProfile,
@@ -29,6 +30,7 @@ import {
   onAuthStateChanged,
   reload,
   resolveReadyConfigContent,
+  sanitizeNavOrder,
   saveDiscoveredProviderToFirestore,
   saveVerifiedVpnAccountToFirestore,
   sendEmailVerification,
@@ -38,7 +40,9 @@ import {
   subscribeReadyConfigs,
   subscribeUserAccounts,
   subscribeUserDiscoveredProviders,
+  subscribeUserNavOrder,
   updateProfile,
+  updateUserNavOrder,
   updateVpnAccountAutoRenew,
   updateVpnAccountConnectionPreset,
   updateVpnAccountCustomName,
@@ -65,6 +69,39 @@ import type {
 } from './types.ts';
 
 const PINNED_PROVIDERS_STORAGE_KEY = 'vpn_fastore_pinned_providers_v1';
+const LEGACY_NAV_ORDER_STORAGE_KEY = 'vpn_fastore_nav_order_v1';
+const NAV_ORDER_STORAGE_PREFIX = 'vpn_fastore_nav_order_v1_';
+
+function loadAccountCachedNavOrder(uid: string): WorkspaceTab[] | null {
+  try {
+    const raw = localStorage.getItem(`${NAV_ORDER_STORAGE_PREFIX}${uid}`);
+    if (!raw) return null;
+    return sanitizeNavOrder(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function saveAccountCachedNavOrder(uid: string, order: WorkspaceTab[]): void {
+  try {
+    localStorage.setItem(`${NAV_ORDER_STORAGE_PREFIX}${uid}`, JSON.stringify(sanitizeNavOrder(order)));
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
+function consumeLegacyNavOrder(): WorkspaceTab[] | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_NAV_ORDER_STORAGE_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(LEGACY_NAV_ORDER_STORAGE_KEY);
+    const parsed = sanitizeNavOrder(JSON.parse(raw));
+    const differsFromDefault = parsed.some((tab, idx) => tab !== DEFAULT_NAV_ORDER[idx]);
+    return differsFromDefault ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 function isRealRenewalSupported(acc: SavedVpnAccount): boolean {
   return (
@@ -262,6 +299,7 @@ function AppShell() {
   const [readyConfigsLoading, setReadyConfigsLoading] = useState<boolean>(true);
   const [readyConfigsRefreshing, setReadyConfigsRefreshing] = useState<boolean>(false);
   const [readyConfigsError, setReadyConfigsError] = useState<string | null>(null);
+  const [navOrder, setNavOrder] = useState<WorkspaceTab[]>(() => [...DEFAULT_NAV_ORDER]);
 
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -445,6 +483,44 @@ function AppShell() {
           return;
         }
         setReadyConfigsError(err.message);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [firebaseUser]);
+
+  // Real-time Cloud Firestore subscription for user's personalized sidebar menu order
+  useEffect(() => {
+    if (!firebaseUser) {
+      setNavOrder([...DEFAULT_NAV_ORDER]);
+      return;
+    }
+
+    const uid = firebaseUser.uid;
+    const cached = loadAccountCachedNavOrder(uid);
+    setNavOrder(cached ?? [...DEFAULT_NAV_ORDER]);
+
+    const unsubscribe = subscribeUserNavOrder(
+      uid,
+      (cloudOrder) => {
+        if (cloudOrder) {
+          setNavOrder(cloudOrder);
+          saveAccountCachedNavOrder(uid, cloudOrder);
+          consumeLegacyNavOrder();
+          return;
+        }
+        const legacyOrder = consumeLegacyNavOrder();
+        if (legacyOrder) {
+          setNavOrder(legacyOrder);
+          saveAccountCachedNavOrder(uid, legacyOrder);
+          void updateUserNavOrder(firebaseUser, legacyOrder);
+        } else if (cached && cached.some((t, i) => t !== DEFAULT_NAV_ORDER[i])) {
+          void updateUserNavOrder(firebaseUser, cached);
+        }
+      },
+      (err) => {
+        if (isTransientFirestoreNetworkError(err)) return;
+        console.warn('Could not sync sidebar menu order:', err);
       },
     );
 
@@ -1203,6 +1279,23 @@ function AppShell() {
     }
   };
 
+  const handleNavOrderChange = useCallback(
+    (nextOrder: WorkspaceTab[]) => {
+      const cleanOrder = sanitizeNavOrder(nextOrder);
+      setNavOrder(cleanOrder);
+      if (!firebaseUser) return;
+      saveAccountCachedNavOrder(firebaseUser.uid, cleanOrder);
+      void updateUserNavOrder(firebaseUser, cleanOrder).catch((err) => {
+        if (!isTransientFirestoreNetworkError(err)) {
+          setErrorBanner(
+            err instanceof Error ? err.message : 'تعذر مزامنة ترتيب القائمة مع الحساب السحابي.',
+          );
+        }
+      });
+    },
+    [firebaseUser],
+  );
+
   const isSignedInAuth = Boolean(user);
   const effectiveTab: WorkspaceTab = isSignedInAuth ? activeTab : 'auth';
 
@@ -1227,6 +1320,8 @@ function AppShell() {
         isDark={isDark}
         onToggleDark={() => setIsDark((prev) => !prev)}
         onNavigateTab={handleNavigateTab}
+        navOrder={navOrder}
+        onNavOrderChange={handleNavOrderChange}
         providers={isSignedInAuth ? serverData?.providers : []}
         servers={isSignedInAuth ? serverData?.allServers : []}
         accounts={isSignedInAuth ? accounts : []}
