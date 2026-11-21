@@ -1,0 +1,6 @@
+{
+  "name": "VPN Fastore Pro",
+  "description": "VPN Fastore Pro — منصة متكاملة لإنشاء وإدارة حسابات VPN و SSH بجميع الصيغ مع فحص البينج الفوري، عدد المتصلين، مؤقت الانتهاء، والتجديد التلقائي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

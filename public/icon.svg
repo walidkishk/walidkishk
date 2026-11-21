@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="blueGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="textGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="#000000" />
+
+  <!-- Glowing Neon Blue Double Shield + Checkmark -->
+  <g filter="url(#blueGlow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer shield -->
+    <path
+      d="M256 108 L299 124 L299 162 C299 189 280 209 256 220 C232 209 213 189 213 162 L213 124 Z"
+      stroke="#258eff"
+      stroke-width="4.5"
+    />
+    <!-- Inner shield -->
+    <path
+      d="M256 121 L287 132.5 L287 161.5 C287 182 273 197.5 256 206.5 C239 197.5 225 182 225 161.5 L225 132.5 Z"
+      stroke="#55adff"
+      stroke-width="3.5"
+    />
+    <!-- Stylized Checkmark extending to top-right -->
+    <path
+      d="M236 160 L253 177 L303 122"
+      stroke="#84c9ff"
+      stroke-width="6.5"
+    />
+  </g>
+
+  <!-- Crisp Typography matching VPN Fast / Store Pro -->
+  <text
+    x="256"
+    y="296"
+    text-anchor="middle"
+    fill="#ffffff"
+    font-family="Noto Sans, Liberation Sans, DejaVu Sans, Arial, sans-serif"
+    font-weight="700"
+    font-size="68"
+    letter-spacing="-1.5"
+  >VPN Fast</text>
+
+  <text
+    x="256"
+    y="366"
+    text-anchor="middle"
+    fill="#0a7cff"
+    filter="url(#textGlow)"
+    font-family="Noto Sans, Liberation Sans, DejaVu Sans, Arial, sans-serif"
+    font-weight="700"
+    font-size="68"
+    letter-spacing="-1.5"
+  >Store Pro</text>
+</svg>

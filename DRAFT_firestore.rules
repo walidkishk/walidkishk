@@ -1,0 +1,729 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Pillar 3: Global hardened primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAppOwner() {
+      return isSignedIn()
+        && request.auth.token.email == 'ledokishk@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isValidProtocol(proto) {
+      return proto is string && proto.size() <= 32 && proto in [
+        'ssh_ws',
+        'ssh_ssl',
+        'ssh_dropbear',
+        'slowdns',
+        'v2ray_vmess',
+        'v2ray_vless',
+        'wireguard',
+        'noobzvpn',
+        'squid'
+      ];
+    }
+
+    function isValidReadyConfigProtocol(proto) {
+      return proto is string && proto.size() <= 32 && proto in [
+        'ssh_ws',
+        'ssh_ssl',
+        'ssh_dropbear',
+        'slowdns',
+        'v2ray_vmess',
+        'v2ray_vless',
+        'wireguard',
+        'noobzvpn',
+        'squid',
+        'http_custom',
+        'http_injector',
+        'darktunnel',
+        'npv_tunnel',
+        'openvpn',
+        'custom_file'
+      ];
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 320
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSavedVpnAccount(data, userId, accountId) {
+      return data.keys().hasAll([
+          'id',
+          'ownerId',
+          'ownerEmail',
+          'serverId',
+          'serverCode',
+          'serverName',
+          'serverCountryAr',
+          'serverLocation',
+          'serverPageUrl',
+          'host',
+          'slowDnsHost',
+          'protocol',
+          'port',
+          'username',
+          'password',
+          'uuid',
+          'sni',
+          'wireguardPrivateKey',
+          'wireguardPublicKey',
+          'createdAtIso',
+          'expiresAt',
+          'durationDays',
+          'autoRenew',
+          'renewCount',
+          'upstreamProvisioned',
+          'upstreamMessage',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'ownerId',
+          'ownerEmail',
+          'serverId',
+          'serverCode',
+          'serverName',
+          'serverCountryAr',
+          'serverLocation',
+          'serverPageUrl',
+          'host',
+          'serverIp',
+          'slowDnsHost',
+          'protocol',
+          'port',
+          'username',
+          'customName',
+          'password',
+          'uuid',
+          'sni',
+          'wireguardPrivateKey',
+          'wireguardPublicKey',
+          'createdAtIso',
+          'expiresAt',
+          'durationDays',
+          'autoRenew',
+          'renewCount',
+          'lastRenewedAt',
+          'lastPingMs',
+          'lastPingCheckedAt',
+          'connectedUsersAtCheck',
+          'accountConnectedUsers',
+          'accountMaxUsers',
+          'accountConnectionsSource',
+          'upstreamProvisioned',
+          'upstreamMessage',
+          'rawUpstreamHtml',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == accountId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.ownerEmail is string
+        && data.ownerEmail.size() >= 3
+        && data.ownerEmail.size() <= 320
+        && data.serverId is string
+        && data.serverId.size() >= 1
+        && data.serverId.size() <= 32
+        && data.serverId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.serverCode is string
+        && data.serverCode.size() >= 1
+        && data.serverCode.size() <= 32
+        && data.serverName is string
+        && data.serverName.size() >= 1
+        && data.serverName.size() <= 128
+        && data.serverCountryAr is string
+        && data.serverCountryAr.size() >= 1
+        && data.serverCountryAr.size() <= 128
+        && data.serverLocation is string
+        && data.serverLocation.size() >= 1
+        && data.serverLocation.size() <= 128
+        && data.serverPageUrl is string
+        && data.serverPageUrl.size() <= 256
+        && data.host is string
+        && data.host.size() >= 1
+        && data.host.size() <= 128
+        && (!('serverIp' in data) || data.serverIp == null || (data.serverIp is string && data.serverIp.size() <= 64))
+        && data.slowDnsHost is string
+        && data.slowDnsHost.size() >= 1
+        && data.slowDnsHost.size() <= 128
+        && isValidProtocol(data.protocol)
+        && data.port is int
+        && data.port >= 1
+        && data.port <= 65535
+        && data.username is string
+        && data.username.size() >= 3
+        && data.username.size() <= 64
+        && (!('customName' in data) || data.customName == null || (data.customName is string && data.customName.size() <= 80))
+        && data.password is string
+        && data.password.size() >= 3
+        && data.password.size() <= 128
+        && data.uuid is string
+        && data.uuid.size() >= 1
+        && data.uuid.size() <= 64
+        && data.sni is string
+        && data.sni.size() >= 1
+        && data.sni.size() <= 256
+        && data.wireguardPrivateKey is string
+        && data.wireguardPrivateKey.size() <= 128
+        && data.wireguardPublicKey is string
+        && data.wireguardPublicKey.size() <= 128
+        && data.createdAtIso is string
+        && data.createdAtIso.size() >= 10
+        && data.createdAtIso.size() <= 64
+        && data.expiresAt is string
+        && data.expiresAt.size() >= 10
+        && data.expiresAt.size() <= 64
+        && data.durationDays is int
+        && data.durationDays >= 1
+        && data.durationDays <= 30
+        && data.autoRenew is bool
+        && data.renewCount is int
+        && data.renewCount >= 0
+        && data.renewCount <= 10000
+        && (!('lastRenewedAt' in data) || data.lastRenewedAt == null || (data.lastRenewedAt is string && data.lastRenewedAt.size() <= 64))
+        && (!('lastPingMs' in data) || data.lastPingMs == null || (data.lastPingMs is int && data.lastPingMs >= 0 && data.lastPingMs <= 60000))
+        && (!('lastPingCheckedAt' in data) || data.lastPingCheckedAt == null || (data.lastPingCheckedAt is string && data.lastPingCheckedAt.size() <= 64))
+        && (!('connectedUsersAtCheck' in data) || data.connectedUsersAtCheck == null || (data.connectedUsersAtCheck is int && data.connectedUsersAtCheck >= 0 && data.connectedUsersAtCheck <= 100000))
+        && (!('accountConnectedUsers' in data) || data.accountConnectedUsers == null || (data.accountConnectedUsers is int && data.accountConnectedUsers >= 0 && data.accountConnectedUsers <= 10000))
+        && (!('accountMaxUsers' in data) || data.accountMaxUsers == null || (data.accountMaxUsers is int && data.accountMaxUsers >= 1 && data.accountMaxUsers <= 1000))
+        && (!('accountConnectionsSource' in data) || data.accountConnectionsSource == null || (data.accountConnectionsSource is string && data.accountConnectionsSource.size() <= 16 && data.accountConnectionsSource in ['upstream', 'local']))
+        && data.upstreamProvisioned is bool
+        && data.upstreamProvisioned == true
+        && data.upstreamMessage is string
+        && data.upstreamMessage.size() <= 512
+        && (!('rawUpstreamHtml' in data) || data.rawUpstreamHtml == null || (data.rawUpstreamHtml is string && data.rawUpstreamHtml.size() <= 8192))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPinnedDiscoveredProvider(data, userId, providerId) {
+      return data.keys().hasAll([
+          'providerId',
+          'ownerId',
+          'name',
+          'nameAr',
+          'domain',
+          'baseUrl',
+          'resetScheduleAr',
+          'validityDaysLabelAr',
+          'supportedProtocols',
+          'descriptionAr',
+          'supportsAutoRenew',
+          'requiresCookies',
+          'servers',
+          'pinnedAtIso',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'providerId',
+          'ownerId',
+          'name',
+          'nameAr',
+          'domain',
+          'baseUrl',
+          'resetScheduleAr',
+          'validityDaysLabelAr',
+          'supportedProtocols',
+          'descriptionAr',
+          'supportsAutoRenew',
+          'requiresCookies',
+          'servers',
+          'pinnedAtIso',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.providerId)
+        && data.providerId.size() <= 64
+        && data.providerId == providerId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 128
+        && data.nameAr is string && data.nameAr.size() >= 1 && data.nameAr.size() <= 128
+        && data.domain is string && data.domain.size() >= 1 && data.domain.size() <= 128
+        && data.baseUrl is string && data.baseUrl.size() >= 1 && data.baseUrl.size() <= 256
+        && data.resetScheduleAr is string && data.resetScheduleAr.size() <= 128
+        && data.validityDaysLabelAr is string && data.validityDaysLabelAr.size() <= 128
+        && data.supportedProtocols is list
+        && data.supportedProtocols.size() >= 1
+        && data.supportedProtocols.size() <= 9
+        && data.supportedProtocols[0] is string
+        && data.descriptionAr is string && data.descriptionAr.size() <= 512
+        && data.supportsAutoRenew is bool
+        && data.requiresCookies is bool
+        && data.servers is list
+        && data.servers.size() >= 1
+        && data.servers.size() <= 15
+        && data.servers[0] is map
+        && data.pinnedAtIso is string && data.pinnedAtIso.size() >= 10 && data.pinnedAtIso.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReadyConfig(data, configId) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'protocol',
+          'fileName',
+          'serverLabel',
+          'notes',
+          'content',
+          'encoding',
+          'isPublished',
+          'authorUid',
+          'createdAtIso',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'title',
+          'protocol',
+          'fileName',
+          'serverLabel',
+          'notes',
+          'content',
+          'encoding',
+          'sourceMode',
+          'chunkCount',
+          'totalBytes',
+          'isPublished',
+          'authorUid',
+          'createdAtIso',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == configId
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && isValidReadyConfigProtocol(data.protocol)
+        && data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 128
+        && data.serverLabel is string && data.serverLabel.size() <= 120
+        && data.notes is string && data.notes.size() <= 500
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 200000
+        && data.encoding is string && data.encoding.size() <= 16 && data.encoding in ['text', 'base64']
+        && (!('sourceMode' in data) || (data.sourceMode is string && data.sourceMode.size() <= 16 && data.sourceMode in ['paste', 'upload']))
+        && (!('chunkCount' in data) || (data.chunkCount is int && data.chunkCount >= 0 && data.chunkCount <= 20))
+        && (!('totalBytes' in data) || (data.totalBytes is int && data.totalBytes >= 0 && data.totalBytes <= 5242880))
+        && data.isPublished is bool
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && data.createdAtIso is string && data.createdAtIso.size() >= 10 && data.createdAtIso.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReadyConfigChunk(data) {
+      return data.keys().hasAll([
+          'index',
+          'data',
+          'authorUid',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'index',
+          'data',
+          'authorUid',
+          'createdAt'
+        ])
+        && data.index is int && data.index >= 0 && data.index < 20
+        && data.data is string && data.data.size() >= 1 && data.data.size() <= 600000
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && data.createdAt is timestamp;
+    }
+
+    function isValidOwnerChatThread(data, userId) {
+      return data.keys().hasAll([
+          'userId',
+          'userEmail',
+          'userName',
+          'lastMessageText',
+          'lastSenderRole',
+          'lastMessageAtIso',
+          'unreadByOwner',
+          'unreadByUser',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'userEmail',
+          'userName',
+          'lastMessageText',
+          'lastSenderRole',
+          'lastMessageAtIso',
+          'unreadByOwner',
+          'unreadByUser',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && data.userId == userId
+        && data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 320
+        && data.userName is string && data.userName.size() <= 120
+        && data.lastMessageText is string && data.lastMessageText.size() >= 1 && data.lastMessageText.size() <= 1500
+        && data.lastSenderRole is string && data.lastSenderRole.size() <= 16 && data.lastSenderRole in ['user', 'owner']
+        && data.lastMessageAtIso is string && data.lastMessageAtIso.size() >= 10 && data.lastMessageAtIso.size() <= 64
+        && data.unreadByOwner is bool
+        && data.unreadByUser is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOwnerChatMessage(data, userId, messageId) {
+      return data.keys().hasAll([
+          'id',
+          'threadUserId',
+          'senderUid',
+          'senderEmail',
+          'senderRole',
+          'text',
+          'createdAtIso',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'threadUserId',
+          'senderUid',
+          'senderEmail',
+          'senderRole',
+          'text',
+          'createdAtIso',
+          'createdAt'
+        ])
+        && isValidId(data.id)
+        && data.id == messageId
+        && isValidId(data.threadUserId)
+        && data.threadUserId == userId
+        && isValidId(data.senderUid)
+        && data.senderUid == request.auth.uid
+        && data.senderEmail is string && data.senderEmail.size() >= 3 && data.senderEmail.size() <= 320
+        && data.senderRole is string && data.senderRole.size() <= 16 && data.senderRole in ['user', 'owner']
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1500
+        && data.createdAtIso is string && data.createdAtIso.size() >= 10 && data.createdAtIso.size() <= 64
+        && data.createdAt is timestamp;
+    }
+
+    // Pillar 6: PII Isolation - user profile strictly owner-only, no blanket list
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']);
+      allow delete: if false;
+
+      // User's Saved Real VPN Accounts subcollection
+      match /accounts/{accountId} {
+        allow get: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(accountId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        // Pillar 8: Enforce ownership via resource.data without get()/exists() in list
+        allow list: if isOwner(userId)
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(accountId)
+          && isValidSavedVpnAccount(incoming(), userId, accountId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        // Pillar 2 & 4.5: Validation helper first + Action-Based Update Pattern
+        allow update: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(accountId)
+          && isValidSavedVpnAccount(incoming(), userId, accountId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().id == existing().id
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && (
+            // Action: Toggle auto-renew setting
+            incoming().diff(existing()).affectedKeys().hasOnly(['autoRenew', 'updatedAt'])
+            ||
+            // Action: Manually update expiration date
+            incoming().diff(existing()).affectedKeys().hasOnly(['expiresAt', 'updatedAt'])
+            ||
+            // Action: Update custom account display name
+            incoming().diff(existing()).affectedKeys().hasOnly(['customName', 'updatedAt'])
+            ||
+            // Action: Refresh live ping and server connected user count
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'lastPingMs',
+              'lastPingCheckedAt',
+              'connectedUsersAtCheck',
+              'serverIp',
+              'updatedAt'
+            ])
+            ||
+            // Action: Renew verified upstream VPN account
+            (
+              incoming().renewCount >= existing().renewCount
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'expiresAt',
+                'renewCount',
+                'lastRenewedAt',
+                'lastPingMs',
+                'lastPingCheckedAt',
+                'connectedUsersAtCheck',
+                'upstreamProvisioned',
+                'upstreamMessage',
+                'updatedAt'
+              ])
+            )
+            ||
+            // Action: Update connection protocol/port/SNI preset
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'sni',
+              'protocol',
+              'port',
+              'updatedAt'
+            ])
+          );
+
+        allow delete: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(accountId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+      }
+
+      // User's Pinned Discovered VPN Providers subcollection
+      match /discoveredProviders/{providerId} {
+        allow get: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(providerId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId)
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(providerId)
+          && isValidPinnedDiscoveredProvider(incoming(), userId, providerId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(providerId)
+          && isValidPinnedDiscoveredProvider(incoming(), userId, providerId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().providerId == existing().providerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'servers',
+            'resetScheduleAr',
+            'validityDaysLabelAr',
+            'descriptionAr',
+            'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(providerId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+      }
+    }
+
+    // Publicly readable Ready Configs (no PII), writable strictly by verified App Owner
+    match /readyConfigs/{configId} {
+      allow get: if isValidId(configId) && (existing().isPublished == true || isAppOwner());
+      allow list: if resource.data.isPublished == true || isAppOwner();
+      allow create: if isAppOwner()
+        && isValidId(configId)
+        && isValidReadyConfig(incoming(), configId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAppOwner()
+        && isValidId(configId)
+        && isValidReadyConfig(incoming(), configId)
+        && incoming().id == existing().id
+        && incoming().authorUid == existing().authorUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'protocol',
+          'fileName',
+          'serverLabel',
+          'notes',
+          'content',
+          'encoding',
+          'sourceMode',
+          'chunkCount',
+          'totalBytes',
+          'isPublished',
+          'updatedAt'
+        ]);
+      allow delete: if isAppOwner() && isValidId(configId);
+
+      // Sequential chunks for large ready config payloads (up to 5 MB)
+      match /chunks/{chunkId} {
+        allow get: if isValidId(configId)
+          && isValidId(chunkId)
+          && exists(/databases/$(database)/documents/readyConfigs/$(configId))
+          && (get(/databases/$(database)/documents/readyConfigs/$(configId)).data.isPublished == true || isAppOwner());
+        allow list: if false;
+        allow create: if isAppOwner()
+          && isValidId(configId)
+          && isValidId(chunkId)
+          && isValidReadyConfigChunk(incoming())
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/readyConfigs/$(configId));
+        allow update: if false;
+        allow delete: if isAppOwner()
+          && isValidId(configId)
+          && isValidId(chunkId)
+          && exists(/databases/$(database)/documents/readyConfigs/$(configId));
+      }
+    }
+
+    // Direct 1-to-1 Owner Support Chat (strictly private between thread owner userId and verified App Owner)
+    match /ownerChats/{userId} {
+      allow get: if (isOwner(userId) || isAppOwner()) && isValidId(userId);
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAppOwner();
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidOwnerChatThread(incoming(), userId)
+        && incoming().userId == request.auth.uid
+        && incoming().lastSenderRole == 'user'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if (isOwner(userId) || isAppOwner())
+        && isValidId(userId)
+        && isValidOwnerChatThread(incoming(), userId)
+        && incoming().userId == existing().userId
+        && incoming().userEmail == existing().userEmail
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: User sends a message in their thread
+          (
+            isOwner(userId)
+            && incoming().lastSenderRole == 'user'
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'userName',
+              'lastMessageText',
+              'lastSenderRole',
+              'lastMessageAtIso',
+              'unreadByOwner',
+              'unreadByUser',
+              'updatedAt'
+            ])
+          )
+          ||
+          // Action: User marks owner reply as read
+          (
+            isOwner(userId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['unreadByUser', 'updatedAt'])
+          )
+          ||
+          // Action: Verified Owner replies to user
+          (
+            isAppOwner()
+            && incoming().lastSenderRole == 'owner'
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'lastMessageText',
+              'lastSenderRole',
+              'lastMessageAtIso',
+              'unreadByOwner',
+              'unreadByUser',
+              'updatedAt'
+            ])
+          )
+          ||
+          // Action: Verified Owner marks user thread as read
+          (
+            isAppOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['unreadByOwner', 'updatedAt'])
+          )
+        );
+      allow delete: if isAppOwner() && isValidId(userId);
+
+      match /messages/{messageId} {
+        allow get: if (isOwner(userId) || isAppOwner())
+          && isValidId(userId)
+          && isValidId(messageId)
+          && exists(/databases/$(database)/documents/ownerChats/$(userId));
+        allow list: if (isOwner(userId) && resource.data.threadUserId == request.auth.uid)
+          || isAppOwner();
+        allow create: if (isOwner(userId) || isAppOwner())
+          && isValidId(userId)
+          && isValidId(messageId)
+          && isValidOwnerChatMessage(incoming(), userId, messageId)
+          && (
+            (incoming().senderRole == 'owner' && isAppOwner())
+            || (incoming().senderRole == 'user' && isOwner(userId))
+          )
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/ownerChats/$(userId));
+        allow update: if false;
+        allow delete: if isAppOwner()
+          && isValidId(userId)
+          && isValidId(messageId)
+          && exists(/databases/$(database)/documents/ownerChats/$(userId));
+      }
+    }
+  }
+}

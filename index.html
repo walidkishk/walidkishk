@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VPN Fastore Pro" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <title>VPN Fastore Pro | صانع حسابات VPN وإدارة السيرفر</title>
+    <meta
+      name="description"
+      content="VPN Fastore Pro — منصة متكاملة لإنشاء وإدارة حسابات VPN و SSH بجميع الصيغ مع فحص البينج الفوري، عدد المتصلين، مؤقت الانتهاء، والتجديد التلقائي."
+    />
+    <meta property="og:title" content="VPN Fastore Pro | صانع حسابات VPN وإدارة السيرفر" />
+    <meta
+      property="og:description"
+      content="إنشاء وحفظ حسابات VPN بجميع الصيغ من خادم ssh-tunnel.net/europe-africa/server-15 مع قياس البينج وعدد المتصلين والتجديد التلقائي."
+    />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="google-adsense-account" content="ca-pub-9961117259642205" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9961117259642205" crossorigin="anonymous"></script>
+    <style>
+      html.dark,
+      html.dark body {
+        background-color: #000000;
+        color: #f4f4f5;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 dark:bg-black dark:text-zinc-100 antialiased">
+    <div id="root">
+      <div
+        style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#94a3b8;direction:rtl;background-color:#000000"
+      >
+        جارٍ تحميل VPN Fastore Pro...
+      </div>
+    </div>
+    <script>
+      (function () {
+        var mounted = false;
+        window.__APP_MOUNTED__ = false;
+        function showRecovery(reason) {
+          if (mounted || window.__APP_MOUNTED__) return;
+          var root = document.getElementById('root');
+          if (!root || root.getAttribute('data-app-mounted') === '1') return;
+          try {
+            if (!sessionStorage.getItem('de2_boot_healed')) {
+              sessionStorage.setItem('de2_boot_healed', '1');
+              Promise.resolve()
+                .then(function () {
+                  if ('serviceWorker' in navigator) {
+                    return navigator.serviceWorker.getRegistrations().then(function (regs) {
+                      return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    });
+                  }
+                })
+                .then(function () {
+                  if ('caches' in window) {
+                    return caches.keys().then(function (keys) {
+                      return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                    });
+                  }
+                })
+                .finally(function () {
+                  window.location.reload();
+                });
+              return;
+            }
+          } catch (e) {}
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;color:#f4f4f5;padding:24px;font-family:system-ui,-apple-system,sans-serif;direction:rtl">' +
+            '<div style="max-width:440px;width:100%;border:1px solid #27272a;background:#09090b;border-radius:12px;padding:20px">' +
+            '<h2 style="margin:0 0 8px;font-size:16px;font-weight:700;color:#fff">تعذر تحميل واجهة التطبيق بالكامل</h2>' +
+            '<p style="margin:0 0 14px;font-size:12px;line-height:1.7;color:#a1a1aa">' +
+            (reason ? String(reason).slice(0, 180) : 'قد توجد ملفات مخزنة مؤقتاً قديمة في المتصفح.') +
+            '</p>' +
+            '<button id="de2-hard-reload" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;width:100%">إصلاح الذاكرة المؤقتة وإعادة التحميل</button>' +
+            '</div></div>';
+          var btn = document.getElementById('de2-hard-reload');
+          if (btn) {
+            btn.onclick = function () {
+              try { sessionStorage.removeItem('de2_boot_healed'); } catch (e) {}
+              window.location.href = window.location.pathname + '?v=' + Date.now();
+            };
+          }
+        }
+        window.addEventListener('error', function (ev) {
+          if (!window.__APP_MOUNTED__) {
+            showRecovery(ev && ev.message ? ev.message : 'Script load error');
+          }
+        });
+        window.addEventListener('unhandledrejection', function (ev) {
+          if (!window.__APP_MOUNTED__ && ev && ev.reason) {
+            var msg = String(ev.reason && ev.reason.message ? ev.reason.message : ev.reason);
+            if (/import|module|chunk|loading css|failed to fetch/i.test(msg)) {
+              showRecovery(msg);
+            }
+          }
+        });
+        setTimeout(function () {
+          if (!window.__APP_MOUNTED__) {
+            showRecovery('انتهت مهلة تحميل وحدات التطبيق من الرابط المباشر.');
+          } else {
+            mounted = true;
+          }
+        }, 14000);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

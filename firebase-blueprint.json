@@ -1,0 +1,654 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated application user profile isolated to its owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320,
+          "description": "Verified email address of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "User display name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "SavedVpnAccount": {
+      "title": "SavedVpnAccount",
+      "description": "Verified real VPN/SSH account imported or provisioned via ssh-tunnel.net.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerEmail": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320
+        },
+        "serverId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "serverCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverCountryAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverLocation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverPageUrl": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverIp": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Resolved public IPv4 address of the VPN server host."
+        },
+        "slowDnsHost": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "ssh_ws",
+            "ssh_ssl",
+            "ssh_dropbear",
+            "slowdns",
+            "v2ray_vmess",
+            "v2ray_vless",
+            "wireguard",
+            "noobzvpn",
+            "squid"
+          ],
+          "maxLength": 32
+        },
+        "port": {
+          "type": "integer"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64
+        },
+        "customName": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Optional user-defined display label for this VPN account."
+        },
+        "password": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "uuid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "sni": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "wireguardPrivateKey": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "wireguardPublicKey": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAtIso": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "durationDays": {
+          "type": "integer"
+        },
+        "autoRenew": {
+          "type": "boolean"
+        },
+        "renewCount": {
+          "type": "integer"
+        },
+        "lastRenewedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "lastPingMs": {
+          "type": "integer"
+        },
+        "lastPingCheckedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "connectedUsersAtCheck": {
+          "type": "integer"
+        },
+        "accountConnectedUsers": {
+          "type": "integer"
+        },
+        "accountMaxUsers": {
+          "type": "integer"
+        },
+        "accountConnectionsSource": {
+          "type": "string",
+          "enum": ["upstream", "local"],
+          "maxLength": 16
+        },
+        "upstreamProvisioned": {
+          "type": "boolean"
+        },
+        "upstreamMessage": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "rawUpstreamHtml": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "ownerEmail",
+        "serverId",
+        "serverCode",
+        "serverName",
+        "serverCountryAr",
+        "serverLocation",
+        "serverPageUrl",
+        "host",
+        "slowDnsHost",
+        "protocol",
+        "port",
+        "username",
+        "password",
+        "uuid",
+        "sni",
+        "wireguardPrivateKey",
+        "wireguardPublicKey",
+        "createdAtIso",
+        "expiresAt",
+        "durationDays",
+        "autoRenew",
+        "renewCount",
+        "upstreamProvisioned",
+        "upstreamMessage",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PinnedDiscoveredProvider": {
+      "title": "PinnedDiscoveredProvider",
+      "description": "User-pinned VPN provider discovered in-app so it persists across app restarts and devices.",
+      "type": "object",
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "nameAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resetScheduleAr": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "validityDaysLabelAr": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "supportedProtocols": {
+          "type": "array"
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "supportsAutoRenew": {
+          "type": "boolean"
+        },
+        "requiresCookies": {
+          "type": "boolean"
+        },
+        "servers": {
+          "type": "array"
+        },
+        "pinnedAtIso": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "providerId",
+        "ownerId",
+        "name",
+        "nameAr",
+        "domain",
+        "baseUrl",
+        "resetScheduleAr",
+        "validityDaysLabelAr",
+        "supportedProtocols",
+        "descriptionAr",
+        "supportsAutoRenew",
+        "requiresCookies",
+        "servers",
+        "pinnedAtIso",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReadyConfig": {
+      "title": "ReadyConfig",
+      "description": "Ready-to-use VPN config files/payloads published by the verified app owner for users to copy and download.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "ssh_ws",
+            "ssh_ssl",
+            "ssh_dropbear",
+            "slowdns",
+            "v2ray_vmess",
+            "v2ray_vless",
+            "wireguard",
+            "noobzvpn",
+            "squid",
+            "http_custom",
+            "http_injector",
+            "darktunnel",
+            "npv_tunnel",
+            "openvpn",
+            "custom_file"
+          ],
+          "maxLength": 32
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverLabel": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200000
+        },
+        "encoding": {
+          "type": "string",
+          "enum": ["text", "base64"],
+          "maxLength": 16
+        },
+        "sourceMode": {
+          "type": "string",
+          "enum": ["paste", "upload"],
+          "maxLength": 16,
+          "description": "Whether the config was pasted as protocol text ('paste') or uploaded as a file ('upload')."
+        },
+        "chunkCount": {
+          "type": "integer",
+          "description": "Number of subcollection chunk documents when content exceeds single-document size (0 for inline)."
+        },
+        "totalBytes": {
+          "type": "integer",
+          "description": "Total byte size of the uploaded config file (up to 5 MB)."
+        },
+        "isPublished": {
+          "type": "boolean"
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAtIso": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "protocol",
+        "fileName",
+        "serverLabel",
+        "notes",
+        "content",
+        "encoding",
+        "isPublished",
+        "authorUid",
+        "createdAtIso",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReadyConfigChunk": {
+      "title": "ReadyConfigChunk",
+      "description": "Sequential chunk of a large ReadyConfig payload stored under /readyConfigs/{configId}/chunks/{chunkId} (up to 5 MB total).",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "Zero-based sequential chunk index."
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600000,
+          "description": "Slice of encoded config file content."
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["index", "data", "authorUid", "createdAt"]
+    },
+    "OwnerChatThread": {
+      "title": "OwnerChatThread",
+      "description": "Direct real-time 1-to-1 support thread between an authenticated user and the verified app owner.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userEmail": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320
+        },
+        "userName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "lastMessageText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "lastSenderRole": {
+          "type": "string",
+          "enum": ["user", "owner"],
+          "maxLength": 16
+        },
+        "lastMessageAtIso": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "unreadByOwner": {
+          "type": "boolean"
+        },
+        "unreadByUser": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "userEmail",
+        "userName",
+        "lastMessageText",
+        "lastSenderRole",
+        "lastMessageAtIso",
+        "unreadByOwner",
+        "unreadByUser",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OwnerChatMessage": {
+      "title": "OwnerChatMessage",
+      "description": "Individual message in a direct user-to-owner chat thread.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "threadUserId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderEmail": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320
+        },
+        "senderRole": {
+          "type": "string",
+          "enum": ["user", "owner"],
+          "maxLength": 16
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "createdAtIso": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "threadUserId",
+        "senderUid",
+        "senderEmail",
+        "senderRole",
+        "text",
+        "createdAtIso",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "UserProfile"
+      },
+      "description": "Authenticated user profile document containing private email and timestamps."
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": {
+        "$ref": "SavedVpnAccount"
+      },
+      "description": "User-owned collection of verified real VPN/SSH accounts synced across sessions."
+    },
+    "/users/{userId}/discoveredProviders/{providerId}": {
+      "schema": {
+        "$ref": "PinnedDiscoveredProvider"
+      },
+      "description": "User-pinned discovered VPN providers persisted permanently across app restarts."
+    },
+    "/readyConfigs/{configId}": {
+      "schema": {
+        "$ref": "ReadyConfig"
+      },
+      "description": "Publicly readable ready VPN configs published exclusively by the verified app owner."
+    },
+    "/readyConfigs/{configId}/chunks/{chunkId}": {
+      "schema": {
+        "$ref": "ReadyConfigChunk"
+      },
+      "description": "Sequential payload chunks for large ready VPN config files up to 5 MB."
+    },
+    "/ownerChats/{userId}": {
+      "schema": {
+        "$ref": "OwnerChatThread"
+      },
+      "description": "Direct real-time chat thread between user {userId} and the verified app owner."
+    },
+    "/ownerChats/{userId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "OwnerChatMessage"
+      },
+      "description": "Immutable chat messages inside a user's direct owner conversation."
+    }
+  }
+}
